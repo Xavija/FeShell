@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>						// op. su stringhe
 #include <unistd.h>						// esecuzione dei comandi
+#include <sys/types.h>					// tipi di dato primitivi da sistema
+#include <sys/stat.h>
+#include <fcntl.h>						// manipolazione descrittore file
 
 #define STRTOK_RESTRICT_DELIM " \t\n"	// delimitatori per tokenizer
 #define CMD_LENGTH 256					// lunghezza massima degli operandi
@@ -130,6 +133,8 @@ int isPiped(_cmd* cmd)		{ return cmd->piped;		}
 int isOut(_cmd* cmd) 		{ return cmd->out;			}
 int isAppend(_cmd* cmd)		{ return cmd->append;		}
 int isIn(_cmd* cmd)			{ return cmd->in;			}
+
+int execute(Node* commands);
 
 int main() {
 	char* 	buffer = (char*) malloc(sizeof(char)*BUFSIZ);	// input buffer
@@ -265,6 +270,7 @@ int parse(char* string) {
 	}
 	
 	printList(commands);
+	execute(commands);
 	//EXECUTE
 	//DELETE LIST
 	return 0;
@@ -273,6 +279,24 @@ int parse(char* string) {
 int execute(Node* commands) {
 	while(commands->prev != NULL)
 		commands = commands->prev;
+	
+	int out;
+
+	while(commands != NULL) {
+		if(isOut(&commands->next->command)) {
+			out = open(commands->next->command.operand, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWUSR);
+			dup2(out, 1);
+			close(out);
+		}
+		if(!strcmp(commands->command.operand, "ls")) {
+			commands->command.args[0] = '\0';
+			//ls(commands->command.args, commands->command.path);
+		} else {
+			execvp(commands->command.operand, commands->command.args);
+		}
+
+		commands = commands->next;
+	}
 	
 	/*
 	exec:
