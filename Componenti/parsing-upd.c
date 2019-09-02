@@ -9,6 +9,9 @@
 #define STRTOK_RESTRICT_DELIM " \t\n"	// delimitatori per tokenizer
 #define CMD_LENGTH 256					// lunghezza massima degli operandi
 
+#define READ_END 0						// "lato" lettura della pipe
+#define WRITE_END 1						// "lato" scrittura della pipe
+
 typedef struct {
 	char 	operand[CMD_LENGTH];
 	int		has_operand;
@@ -270,40 +273,99 @@ int parse(char* string) {
 	}
 	
 	printList(commands);
-	execute(commands);
+	run(commands);
 	//EXECUTE
 	//DELETE LIST
 	return 0;
 }
 
+/* // OLD
 int execute(Node* commands) {
+	// ritorno all'inizio della lista
 	while(commands->prev != NULL)
 		commands = commands->prev;
 	
-	int out;
+	int in, 	// O_RDONLY
+		out, 	// O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR
+		append; // O_APPEND
 
 	while(commands != NULL) {
-		if(isOut(&commands->next->command)) {
-			out = open(commands->next->command.operand, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWUSR);
-			dup2(out, 1);
-			close(out);
+		// se il prossimo è redirect out
+		if(isOut(&commands->next->command)) {	
+			out = open(commands->next->command.operand, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR);
+			dup2(out, 1);		// duplicazione del file descriptor per redirect out
+			close(out);			// chiusura file descriptor originale
+		} else if(isIn(&commands->next->command)) {
+			in = open(commands->next->command.operand, O_RDONLY);
 		}
+		
+		
 		if(!strcmp(commands->command.operand, "ls")) {
 			commands->command.args[0] = '\0';
 			//ls(commands->command.args, commands->command.path);
 		} else {
-			execvp(commands->command.operand, commands->command.args);
+			execvp(commands->command.operand, commands->command.args);	// esecuzione
 		}
 
 		commands = commands->next;
 	}
 	
-	/*
+	
 	exec:
 		while commands:
 			if command is ls:
 				ls(args, path)
 			else execvp;
 		// supporto pipe e redirect?
-	*/
+	
+} */
+
+void dup_redirect(int source, int dest) {
+	if(source != dest) {
+		if(dup2(source, dest) != -1)
+			close(source);
+		else 
+			printf("Error: bad dup2");
+			exit;
+	}
+}
+
+int run(Node* commands) {
+	while(commands->prev != NULL)
+		commands = commands->prev;
+
+	int in = STDIN_FILENO;
+
+	for(; commands->next != NULL; commands = commands->next) {
+		
+		int fd[2];
+		pid_t pid;
+
+		if(pipe(fd) != -1) {
+			pid = fork();
+			if(pid == 0) {
+				close(fd[0]);
+				dup_redirect(in, STDIN_FILENO);
+				dup_redirect(fd[1], STDOUT_FILENO);
+				execvp(commands->command.operand, commands->command.args);
+			} else if(pid > 0) {
+				close(fd[1]);
+				close(in);
+				in = fd[0];
+			} else if(pid == -1) {
+				printf("Bad fork()\n");
+				exit;
+			} else {
+				printf("Bad parent\n");
+				exit;
+			}
+		} else {
+			printf("Bad pipe()\n");
+			exit(1);
+		}
+	}
+	//rimane l'ultimo comando da eseguire, quello con next=NULL
+	dup_redirect(in, STDIN_FILENO);
+	dup_redirect(STDOUT_FILENO, STDOUT_FILENO);
+	execvp(commands->command.operand, commands->command.args);
 }
