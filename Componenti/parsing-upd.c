@@ -164,7 +164,9 @@ int main() {
 }
 
 int parse(char* string) {
-	
+	// TODO
+	// ignorare altri file dopo il primo indicato per redirect
+	// esempio: ... > out1 out2 | grep ... deve restituire errore
 	Node* commands = NULL; 	// lista doppiamente collegata di comandi
 
 	int   flag_out 		= 0,
@@ -175,6 +177,7 @@ int parse(char* string) {
 
 	int preserve_ls_path = 0;		// flag per prevenire che eventuale path specificato per ls
 									// venga inserito tra gli argomenti dello stesso
+	int limit_file = 0;				// flag per prevenire l'inserimento di più di un file per redirect
 	
 	commands = appendNode(&commands);	// elemento iniziale (vuoto)
 
@@ -193,8 +196,13 @@ int parse(char* string) {
 		} else {
 			// trattamento dei caratteri speciali identificati nell'iterazione precedente
 			if((flag_append||flag_in||flag_out||flag_pipe)) {
-				if(hasOperand(&commands->command))
+				if(hasOperand(&commands->command)) {
 					commands = appendNode(&commands);
+				} else {
+					// TODO: printf to stderr
+					printf("Errore durante il parsing: carattere speciale inatteso\n");
+					return 1;
+				}
 				if(flag_pipe) {
 					setPiped(&commands->command);
 					flag_pipe 	= 0;
@@ -279,6 +287,85 @@ int parse(char* string) {
 	return 0;
 }
 
+void dupRedirect(int source, int dest) {
+	if(source != dest) {
+		if(dup2(source, dest) != -1)
+			close(source);
+		else 
+			printf("Error: bad dup2");
+			exit;
+	}
+}
+
+void chooseExecProvider(_cmd* cmd) {
+	if(!strcmp(cmd->operand, "ls"))
+		;//ls()
+	else
+		;//execvp();
+	
+}
+
+int pipeCommand(_cmd* command, int in) {
+	int fd[2];		// pipe {READ_END, WRITE_END}
+	pid_t pid;
+
+	if(pipe(fd) != -1) {
+		pid = fork();
+		if(pid == 0) {						// figlio
+			close(fd[0]);								// chiusura del lato READ inutilizzato del fd `fd[0]`
+			dupRedirect(in, STDIN_FILENO);				// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
+			dupRedirect(fd[1], STDOUT_FILENO);			// duplicazione del file descriptor fd[1] (WRITE) e successiva chiusura dell'originale
+														// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
+			execvp(command->operand, command->args);	// esecuzione del comando
+		} else if(pid > 0) { 				// padre
+			close(fd[1]);								// chiusura lato WRITE inutilizzato
+			close(in);									// chiusura lato READ inutilizzato della pipe precedente
+			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
+		} else if(pid == -1) {
+			printf("Bad fork()\n");
+			exit;
+		} else {
+			printf("Bad parent\n");
+			exit;
+		}
+	} else {
+		printf("Bad pipe()\n");
+		exit(1);
+	}
+
+	return in;											// return di in per aggiornamento del fd lato READ per il prossimo comando
+}
+
+int outCommand(_cmd* command) {
+	int outFile = open(command->operand, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR);
+	if(outFile  == -1) {
+		return -1;
+	} // ripristino stdout???
+	dup2(outFile, STDOUT_FILENO);
+}
+
+int run(Node* commands) {
+	// TODO:
+	// redirect
+	// print stderr
+	while(commands->prev != NULL)												// mi assicuro che la lista parta dall'elemento iniziale (prev=NULL)
+		commands = commands->prev;
+
+	int in = STDIN_FILENO;														// fd READ originale
+
+	for(; commands->next != NULL; commands = commands->next) {
+		if(isPiped(&commands->next->command))									// se il comando (o il prossimo) è in pipe,
+			in = pipeCommand(&commands->command, in);							// allora preparo la pipe e lo eseguo
+		else if(isOut(&commands->next->command)) {								// se c'è un redirect out
+			outCommand(&commands->command.operand);		
+		}
+	}
+	//rimane l'ultimo comando da eseguire, quello con next=NULL
+	dupRedirect(in, STDIN_FILENO);											// 
+	dupRedirect(STDOUT_FILENO, STDOUT_FILENO);								// riporto il lato WRITE al fd originale per poter stampare a video
+	execvp(commands->command.operand, commands->command.args);				// stampa a video di STDOUT
+}
+
 /* // OLD
 int execute(Node* commands) {
 	// ritorno all'inizio della lista
@@ -319,53 +406,3 @@ int execute(Node* commands) {
 		// supporto pipe e redirect?
 	
 } */
-
-void dup_redirect(int source, int dest) {
-	if(source != dest) {
-		if(dup2(source, dest) != -1)
-			close(source);
-		else 
-			printf("Error: bad dup2");
-			exit;
-	}
-}
-
-int run(Node* commands) {
-	while(commands->prev != NULL)
-		commands = commands->prev;
-
-	int in = STDIN_FILENO;
-
-	for(; commands->next != NULL; commands = commands->next) {
-		
-		int fd[2];
-		pid_t pid;
-
-		if(pipe(fd) != -1) {
-			pid = fork();
-			if(pid == 0) {
-				close(fd[0]);
-				dup_redirect(in, STDIN_FILENO);
-				dup_redirect(fd[1], STDOUT_FILENO);
-				execvp(commands->command.operand, commands->command.args);
-			} else if(pid > 0) {
-				close(fd[1]);
-				close(in);
-				in = fd[0];
-			} else if(pid == -1) {
-				printf("Bad fork()\n");
-				exit;
-			} else {
-				printf("Bad parent\n");
-				exit;
-			}
-		} else {
-			printf("Bad pipe()\n");
-			exit(1);
-		}
-	}
-	//rimane l'ultimo comando da eseguire, quello con next=NULL
-	dup_redirect(in, STDIN_FILENO);
-	dup_redirect(STDOUT_FILENO, STDOUT_FILENO);
-	execvp(commands->command.operand, commands->command.args);
-}
