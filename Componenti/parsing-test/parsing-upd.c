@@ -23,7 +23,8 @@ typedef struct {
 	int 	arg_count;
 	char	path[CMD_LENGTH];
 	int 	has_path;
-	char 	file[CMD_LENGTH];			// file per redirect
+	char 	file_in[CMD_LENGTH],
+			file_out[CMD_LENGTH];
 	int 	redirect_mode[4];				/*	0 - niente
 												1 - piped
 												2 - out
@@ -50,7 +51,7 @@ int  appendArg(_cmd* cmd, char* arg);
 /*Imposta il flag di redirect*/
 int  setRedirectMode(_cmd* cmd, int mode);
 /*Registra un file indicato per il redirect*/
-void addFile(_cmd* cmd, char* file);
+void addFile(_cmd* cmd, char* file, int redirect_mode);
 /*Registra eventuale path indicato per ls()*/
 void addPath(_cmd* cmd, char* path);
 Node* reachListHead(Node* commands);
@@ -95,7 +96,8 @@ void initEmptyNode(Node* node) {
 	bzero(node->command.args, CMD_LENGTH);
 	bzero(node->command.operand, CMD_LENGTH);
 	bzero(node->command.path, CMD_LENGTH);
-	bzero(node->command.file, CMD_LENGTH);
+	bzero(node->command.file_in, CMD_LENGTH);
+	bzero(node->command.file_out, CMD_LENGTH);
 }
 
 void addOperand(_cmd* cmd, char* op) {
@@ -129,7 +131,14 @@ int setRedirectMode(_cmd* cmd, int mode) {
 	}
 }
 
-void addFile(_cmd* cmd, char* file) { strcpy(cmd->file, file); }
+void addFile(_cmd* cmd, char* file, int redirect_mode) { 
+	if(redirect_mode == MODE_IN)
+		strcpy(cmd->file_in, file);
+	else if(redirect_mode == MODE_OUT || redirect_mode == MODE_APPEND)
+		strcpy(cmd->file_out, file); 
+	else
+		exit(1);
+}
 
 void clear() { 
 	system("clear");
@@ -153,7 +162,6 @@ int main() {
 
 	//clear();
 	while (1) {
-		
 		printf("\n>> ");
 		if (getline(&buffer, &dim, stdin) == -1)	// input
 			return 1;
@@ -232,7 +240,7 @@ Node* parse(char* string) {
 							commands = appendNode(&commands);
 							break;		
 						default:												// mentre per un redirect sì
-							addFile(&commands->command, tok);
+							addFile(&commands->command, tok, redirect_mode);
 							break;
 					}
 				} else {
@@ -323,9 +331,6 @@ void chooseProvider(_cmd* cmd) {
 		//bzero(cmd->args, 1);
 		//int dir = chdir(cmd->args);
 		;
-	} else if(!strcmp(cmd->operand, "ls")) {
-		execCmd(cmd->args);
-		; // ls()
 	} else {
 		execCmd(cmd->args);
 		; // execvp()
@@ -339,7 +344,7 @@ void runWrapper(_cmd* command, int in, int out) {
 	execvp(command->operand, command->args);
 }
 
-int pipeCommand(_cmd* command, int in) {
+int pipeCommand(_cmd* command, int in, int flag_redirect) {
 	int fd[2];		// pipe {READ_END, WRITE_END}
 	pid_t pid;
 
@@ -352,18 +357,26 @@ int pipeCommand(_cmd* command, int in) {
 														// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
 			execvp(command->operand, command->args);	// esecuzione del comando 
 			*/
+			if(!flag_redirect)
+				dupRedirect(in, STDIN_FILENO);
 			
-			runWrapper(command, in, fd[1]);
+			dupRedirect(fd[1], STDOUT_FILENO);
+			
+
+			execvp(command->operand, command->args);
+			
 			fprintf(stderr, "%s: comando non riconosciuto", command->operand);
 			exit(0);
 			//chooseProvider(command);			
 		} else if(pid > 0) { 				// padre
+			int status;
+			waitpid(pid, &status, 0);		
+			
 			close(fd[1]);								// chiusura lato WRITE inutilizzato
 			close(in);									// chiusura lato READ inutilizzato della pipe precedente
 			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
 			
-			int status;
-			waitpid(pid, &status, 0);			
+				
 		} else if(pid == -1) {
 			printf("Bad fork()\n");
 			exit;
@@ -398,16 +411,15 @@ int redirectCommand(char* file, int mode) {
 			// stderr
 			break;
 	}
-	if(old_fd == -1) {
+	if(old_fd == -1) { // open fail
 		return -2;
 		// stderr
-	} else if(dup2(old_fd, new_fd) == -1) {
-		return -3;
-		// stderr
 	} else {
+		
+		if(dup2(old_fd, new_fd) == -1)
+			return -3; // stderr
 		close(old_fd);
-		if(new_fd == STDIN_FILENO)
-			return old_fd;
+		return old_fd;
 	}
 }
 
@@ -415,39 +427,72 @@ int run(Node* commands) {
 	// TODO:
 	// print stderr
 	
-	int in = STDIN_FILENO;														// fd READ originale
-	
+	int in  = STDIN_FILENO;														// fd READ originale
+	int out = STDOUT_FILENO;
 	int original_stdin  = dup(STDIN_FILENO);
 	int original_stdout = dup(STDOUT_FILENO);
 	//close(original_stdout);
-	int i;
-	int out_set = 0,
-		in_set  = 0;
+	
+	int	in_set  = 0;
 
 	for(; commands != NULL; commands = commands->next) {
 		if(commands->command.redirect_mode[MODE_IN-1] == MODE_IN) {
-			in = redirectCommand(commands->command.file, MODE_IN);
+			in = redirectCommand(commands->command.file_in, MODE_IN); // BUG per `cat < in | wc`: fd non aperto, bad dup2()
 			in_set = 1;
+			switch(out) { //stderr
+				case -2:
+					printf("Bad fd\n");
+					exit(1);
+					break;
+				case -3:
+					printf("Bad dup2\n");
+					exit(-3);
+					break;
+				default:
+					break;
+			}
 		}
 
 		if(commands->command.redirect_mode[MODE_OUT-1] == MODE_OUT) {
-			redirectCommand(commands->command.file, MODE_OUT);
-			out_set = 1;
+			out = redirectCommand(commands->command.file_out, MODE_OUT);
+			switch(out) { //stderr
+				case -2:
+					printf("Bad fd\n");
+					exit(1);
+					break;
+				case -3:
+					printf("Bad dup2\n");
+					exit(-3);
+					break;
+				default:
+					break;
+			}
 		} else if(commands->command.redirect_mode[MODE_APPEND-1] == MODE_APPEND) {
-			redirectCommand(commands->command.file, MODE_APPEND);
-			out_set = 1;
+			out = redirectCommand(commands->command.file_out, MODE_APPEND);
+			
+			switch(out) { //stderr
+				case -2:
+					printf("Bad fd\n");
+					exit(1);
+					break;
+				case -3:
+					printf("Bad dup2\n");
+					exit(-3);
+					break;
+				default:
+					break;
+			}
+
 		}
 
 		if(commands->command.redirect_mode[MODE_PIPE-1] == MODE_PIPE) {
-			in = pipeCommand(&commands->command, in);
-			in_set = 0;
-			out_set = 0;
+			in = pipeCommand(&commands->command, in, in_set);
+			//in_set = 0;
 		} else {
-			if(!in_set)
+			if(!in_set) 
 				dupRedirect(in, STDIN_FILENO);											
 			
 			chooseProvider(&commands->command);
-
 		}
 	}
 
