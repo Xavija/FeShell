@@ -5,6 +5,7 @@
 #include <sys/types.h>					// tipi di dato primitivi da sistema
 #include <sys/stat.h>
 #include <fcntl.h>						// manipolazione descrittore file
+#include <sys/wait.h>
 
 #define STRTOK_RESTRICT_DELIM " \t\n"	// delimitatori per tokenizer
 #define CMD_LENGTH 256					// lunghezza massima degli operandi
@@ -307,22 +308,17 @@ int execCmd(char* *args) {
 	if(pid == -1) {
 		fprintf(stderr, "operazione di fork non riuscita");
 		return -1;
-	} else if(pid == 0) { 	// figlio(
+	} else if(pid == 0) { 	// figlio
 		execvp(args[0], args);
 		fprintf(stderr, "%s: comando non riconosciuto", args[0]);
 		exit(1);
-	} else { 				// padre
-		if(waitpid(pid, 0, 0) < 0) 
-			fprintf(stderr, "waitpid");
+	} else if(pid > 0) { 				// padre
+		int status;
+		waitpid(pid, &status, 0);
 	}
 }
 
 void chooseProvider(_cmd* cmd) {
-	/* if(!strcmp(cmd->operand, "ls"))
-		;//ls()
-	else
-		;//execvp(); */
-
 	if(!strcmp(cmd->operand, "cd")) {
 		//bzero(cmd->args, 1);
 		//int dir = chdir(cmd->args);
@@ -336,6 +332,13 @@ void chooseProvider(_cmd* cmd) {
 	}
 }
 
+void runWrapper(_cmd* command, int in, int out) {
+	dupRedirect(in, STDIN_FILENO);
+	dupRedirect(out, STDOUT_FILENO);
+
+	execvp(command->operand, command->args);
+}
+
 int pipeCommand(_cmd* command, int in) {
 	int fd[2];		// pipe {READ_END, WRITE_END}
 	pid_t pid;
@@ -344,16 +347,23 @@ int pipeCommand(_cmd* command, int in) {
 		pid = fork();
 		if(pid == 0) {						// figlio
 			close(fd[0]);								// chiusura del lato READ inutilizzato del fd `fd[0]`
-			dupRedirect(in, STDIN_FILENO);				// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
+			/* dupRedirect(in, STDIN_FILENO);				// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
 			dupRedirect(fd[1], STDOUT_FILENO);			// duplicazione del file descriptor fd[1] (WRITE) e successiva chiusura dell'originale
 														// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
-			execvp(command->operand, command->args);	// esecuzione del comando
-			//chooseProvider(command);
+			execvp(command->operand, command->args);	// esecuzione del comando 
+			*/
 			
+			runWrapper(command, in, fd[1]);
+			fprintf(stderr, "%s: comando non riconosciuto", command->operand);
+			exit(0);
+			//chooseProvider(command);			
 		} else if(pid > 0) { 				// padre
 			close(fd[1]);								// chiusura lato WRITE inutilizzato
 			close(in);									// chiusura lato READ inutilizzato della pipe precedente
 			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
+			
+			int status;
+			waitpid(pid, &status, 0);			
 		} else if(pid == -1) {
 			printf("Bad fork()\n");
 			exit;
@@ -365,7 +375,6 @@ int pipeCommand(_cmd* command, int in) {
 		printf("Bad pipe()\n");
 		exit(1);
 	}
-
 	return in;											// return di in per aggiornamento del fd lato READ per il prossimo comando
 }
 
@@ -404,13 +413,13 @@ int redirectCommand(char* file, int mode) {
 
 int run(Node* commands) {
 	// TODO:
-	// redirect prima di una pipe
 	// print stderr
 	
-
 	int in = STDIN_FILENO;														// fd READ originale
 	
-	int original_stdout = dup(1);
+	int original_stdin  = dup(STDIN_FILENO);
+	int original_stdout = dup(STDOUT_FILENO);
+	//close(original_stdout);
 	int i;
 	int out_set = 0,
 		in_set  = 0;
@@ -436,13 +445,15 @@ int run(Node* commands) {
 		} else {
 			if(!in_set)
 				dupRedirect(in, STDIN_FILENO);											
-			if(!out_set) 
-				dup2(original_stdout, STDOUT_FILENO);
-			//dupRedirect(STDOUT_FILENO, STDOUT_FILENO);								// riporto il lato WRITE al fd originale per poter stampare a video
-			//execvp(commands->command.operand, commands->command.args);
+			
 			chooseProvider(&commands->command);
+
 		}
 	}
 
+	if(dup2(original_stdout, STDOUT_FILENO) != -1)
+		close(original_stdout);
+	if(dup2(original_stdin, STDIN_FILENO) != -1)
+		close(original_stdin);
 	//fflush(stdout);
 }
