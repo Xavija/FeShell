@@ -154,34 +154,50 @@ int execute(Node* commands);
 
 int main() {
 	char* 	buffer = (char*) malloc(sizeof(char)*BUFSIZ);	// input buffer
-	if(buffer == NULL)
-		exit(-1);
+	if(buffer == NULL) {
+		fprintf(stderr, "allocazione del buffer non riuscita\n");
+		exit(2);
+	}
 	size_t 	dim = (size_t) sizeof(buffer); // dimensione dell'input buffer
 	
 	Node* commands;
+	int result;
 
 	//clear();
 	while (1) {
 		printf("\n>> ");
-		if (getline(&buffer, &dim, stdin) == -1)	// input
-			return 1;
+		if (getline(&buffer, &dim, stdin) == -1 || feof(stdout)) {	// input
+			free(buffer);
+			exit(0);
+		}
 
 		if(strstr(buffer, "exit")) {
-			// free
+			free(buffer);
 			exit(0);
 		} else if(strstr(buffer, "clear")) {
 			clear();
-		} else if((commands = parse(buffer)) != NULL)
-			run(commands);
-		
+		} else if((commands = parse(buffer)) != NULL) {
+			result = run(commands);
+			deleteList(commands);
+
+			if(result == -1)
+				fprintf(stderr, "Errore durante l'esecuzione\n");
+		}
 		/* if(parse_val != 0) {
 			printf("Errore durante il parsing\n");
 			//STDERR
 		} */
-				
 		setbuf(stdin, NULL); // non sembra, ma *funziona*
 	}
 	return 0;
+}
+
+void deleteList(Node* list) {
+	list = reachListHead(list);
+	while(list != NULL) {
+		free(list);
+		list = list->next;
+	}
 }
 
 Node* parse(char* string) {
@@ -208,25 +224,25 @@ Node* parse(char* string) {
 		// per prima cosa viene controllata la presenza di caratteri speciali
 		if(!strcmp(tok, ">")) {
 			if(redirect_mode != MODE_NONE) {
-				printf("Errore durante il parsing: carattere speciale inatteso\n");
+				fprintf(stderr, "%s: carattere speciale inatteso\n", tok);
 				return NULL;
 			}
 			redirect_mode = MODE_OUT;
 		} else if(!strcmp(tok, ">>")) {
 			if(redirect_mode != MODE_NONE) {
-				printf("Errore durante il parsing: carattere speciale inatteso\n");
+				fprintf(stderr, "%s: carattere speciale inatteso\n", tok);
 				return NULL;
 			}
 			redirect_mode = MODE_APPEND;
 		} else if(!strcmp(tok, "<")) {
 			if(redirect_mode != MODE_NONE) {
-				printf("Errore durante il parsing: carattere speciale inatteso\n");
+				fprintf(stderr, "%s: carattere speciale inatteso\n", tok);
 				return NULL;
 			}
 			redirect_mode = MODE_IN;
 		} else if(!strcmp(tok, "|")) {
 			if(redirect_mode != MODE_NONE) {
-				printf("Errore durante il parsing: carattere speciale inatteso\n");
+				fprintf(stderr, "%s: carattere speciale inatteso\n", tok);
 				return NULL;
 			}
 			redirect_mode = MODE_PIPE;
@@ -244,8 +260,7 @@ Node* parse(char* string) {
 							break;
 					}
 				} else {
-					//TODO: stderr
-					printf("Errore durante il parsing: carattere speciale inatteso\n");
+					fprintf(stderr, "carattere speciale inatteso\n");
 					return NULL;
 				}
 			}
@@ -259,7 +274,7 @@ Node* parse(char* string) {
 						&& redirect_mode == MODE_NONE) {
 
 				if(hasPath(&commands->command)) {
-					printf("Troppi argomenti per ls\n"); // TODO stderr
+					fprintf(stderr, "troppi argomenti per ls\n");
 					return NULL;
 				} else {
 					addPath(&commands->command, tok);
@@ -271,7 +286,7 @@ Node* parse(char* string) {
 				preserve_ls_path = 0;
 			} else if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
 				if(appendArg(&commands->command, tok)) {
-					printf("Errore durante il parsing: sono stati indicati troppi argomenti\n");
+					fprintf(stderr, "sono stati indicati troppi argomenti\n");
 					return NULL;
 				}
 			} 
@@ -279,17 +294,15 @@ Node* parse(char* string) {
 				redirect_mode = MODE_NONE;
 
 		} else {
-			printf("%s: carattere inatteso\n", tok);
+			fprintf(stderr, "%s: carattere inatteso\n", tok);
 			return NULL; // stderr
 		}
 
 		tok = strtok(NULL, STRTOK_RESTRICT_DELIM);
 	}
 	
-	commands = reachListHead(commands);
-	return commands;
-	//DELETE LIST
-	return 0;
+	commands = reachListHead(commands);			// raggiungo la testa della lista...
+	return commands;							// e ne restituisco il puntatore
 }
 
 Node* reachListHead(Node* commands) {
@@ -299,13 +312,15 @@ Node* reachListHead(Node* commands) {
 	return commands;
 }
 
-void dupRedirect(int source, int dest) {
-	if(source != dest) {
-		if(dup2(source, dest) != -1)
+int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'originale
+	if(source != dest) {			
+		if(dup2(source, dest) != -1)	{
 			close(source);
-		else 
-			printf("Error: bad dup2()");
-			exit;
+			return 0;
+		} else {
+			fprintf(stderr, "duplicazione del file descriptor non riuscita\n");
+			return -1;
+		}
 	}
 }
 
@@ -314,11 +329,11 @@ int execCmd(char* *args) {
 
 	pid = fork();
 	if(pid == -1) {
-		fprintf(stderr, "operazione di fork non riuscita");
+		fprintf(stderr, "operazione di fork non riuscita\n");
 		return -1;
 	} else if(pid == 0) { 	// figlio
 		execvp(args[0], args);
-		fprintf(stderr, "%s: comando non riconosciuto", args[0]);
+		fprintf(stderr, "%s: comando non riconosciuto\n", args[0]);
 		exit(1);
 	} else if(pid > 0) { 				// padre
 		int status;
@@ -337,14 +352,7 @@ void chooseProvider(_cmd* cmd) {
 	}
 }
 
-void runWrapper(_cmd* command, int in, int out) {
-	dupRedirect(in, STDIN_FILENO);
-	dupRedirect(out, STDOUT_FILENO);
-
-	execvp(command->operand, command->args);
-}
-
-int pipeCommand(_cmd* command, int in, int flag_redirect) {
+int pipeCommand(_cmd* command, int in, int from_file) {
 	int fd[2];		// pipe {READ_END, WRITE_END}
 	pid_t pid;
 
@@ -352,41 +360,40 @@ int pipeCommand(_cmd* command, int in, int flag_redirect) {
 		pid = fork();
 		if(pid == 0) {						// figlio
 			close(fd[0]);								// chiusura del lato READ inutilizzato del fd `fd[0]`
-			/* dupRedirect(in, STDIN_FILENO);				// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
+			/* dupRedirect(in, STDIN_FILENO);			// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
 			dupRedirect(fd[1], STDOUT_FILENO);			// duplicazione del file descriptor fd[1] (WRITE) e successiva chiusura dell'originale
 														// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
 			execvp(command->operand, command->args);	// esecuzione del comando 
 			*/
-			if(!flag_redirect)
-				dupRedirect(in, STDIN_FILENO);
 			
-			dupRedirect(fd[1], STDOUT_FILENO);
-			
-
+			if(!from_file) {	// se ho aperto un file in input non effettuo la duplicazione del fd di nuovo
+				if(dupRedirect(in, STDIN_FILENO) == -1)
+					exit(-1);
+			}
+			if(dupRedirect(fd[1], STDOUT_FILENO) == -1)
+				exit(-1);
 			execvp(command->operand, command->args);
 			
-			fprintf(stderr, "%s: comando non riconosciuto", command->operand);
-			exit(0);
-			//chooseProvider(command);			
+			fprintf(stderr, "%s: comando non riconosciuto", command->operand); // se exec fallisce
+			exit(1);
 		} else if(pid > 0) { 				// padre
 			int status;
-			waitpid(pid, &status, 0);		
+			waitpid(pid, &status, 0);					// attendo il figlio
 			
 			close(fd[1]);								// chiusura lato WRITE inutilizzato
 			close(in);									// chiusura lato READ inutilizzato della pipe precedente
 			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
 			
-				
 		} else if(pid == -1) {
-			printf("Bad fork()\n");
-			exit;
+			fprintf(stderr, "operazione di fork non riuscita\n");
+			exit(-1);
 		} else {
-			printf("Bad parent\n");
-			exit;
+			fprintf(stderr, "errore nel processo padre\n");
+			exit(-2);
 		}
 	} else {
-		printf("Bad pipe()\n");
-		exit(1);
+		fprintf(stderr, "pipe non riuscita\n");
+		exit(-3);
 	}
 	return in;											// return di in per aggiornamento del fd lato READ per il prossimo comando
 }
@@ -407,17 +414,18 @@ int redirectCommand(char* file, int mode) {
 			new_fd = STDIN_FILENO;
 			break;
 		default:
-			return;
-			// stderr
+			fprintf(stderr, "errore durante l'apertura del file %s\n", file);
+			return -1;
 			break;
 	}
 	if(old_fd == -1) { // open fail
-		return -2;
-		// stderr
+		fprintf(stderr, "errore durante l'apertura del file %s\n", file);
+		return -1;
 	} else {
-		
-		if(dup2(old_fd, new_fd) == -1)
-			return -3; // stderr
+		if(dup2(old_fd, new_fd) == -1) {
+			fprintf(stderr, "duplicazione del file descriptor non riuscita\n");
+			return -1; // dup2 fail
+		}
 		close(old_fd);
 		return old_fd;
 	}
@@ -437,61 +445,38 @@ int run(Node* commands) {
 
 	for(; commands != NULL; commands = commands->next) {
 		if(commands->command.redirect_mode[MODE_IN-1] == MODE_IN) {
-			in = redirectCommand(commands->command.file_in, MODE_IN); // BUG per `cat < in | wc`: fd non aperto, bad dup2()
+			//in = redirectCommand(commands->command.file_in, MODE_IN); // BUG per `cat < in | wc`: fd non aperto, bad dup2()
+			
+			in = open(commands->command.file_in, O_RDONLY);
+
+			if(in == -1)
+				return -1;
+			
+			dup2(in, STDIN_FILENO);
+			close(in);
+
 			in_set = 1;
-			switch(out) { //stderr
-				case -2:
-					printf("Bad fd\n");
-					exit(1);
-					break;
-				case -3:
-					printf("Bad dup2\n");
-					exit(-3);
-					break;
-				default:
-					break;
-			}
+			
 		}
 
 		if(commands->command.redirect_mode[MODE_OUT-1] == MODE_OUT) {
 			out = redirectCommand(commands->command.file_out, MODE_OUT);
-			switch(out) { //stderr
-				case -2:
-					printf("Bad fd\n");
-					exit(1);
-					break;
-				case -3:
-					printf("Bad dup2\n");
-					exit(-3);
-					break;
-				default:
-					break;
-			}
+			if(out == -1)
+				return -1;
 		} else if(commands->command.redirect_mode[MODE_APPEND-1] == MODE_APPEND) {
 			out = redirectCommand(commands->command.file_out, MODE_APPEND);
-			
-			switch(out) { //stderr
-				case -2:
-					printf("Bad fd\n");
-					exit(1);
-					break;
-				case -3:
-					printf("Bad dup2\n");
-					exit(-3);
-					break;
-				default:
-					break;
-			}
-
+			if(out == -1)
+				return -1;
 		}
 
 		if(commands->command.redirect_mode[MODE_PIPE-1] == MODE_PIPE) {
 			in = pipeCommand(&commands->command, in, in_set);
-			//in_set = 0;
+			in_set = 0;
 		} else {
-			if(!in_set) 
-				dupRedirect(in, STDIN_FILENO);											
-			
+			if(!in_set) {
+				if(dupRedirect(in, STDIN_FILENO) == -1)
+					return -1;
+			}
 			chooseProvider(&commands->command);
 		}
 	}
@@ -501,4 +486,6 @@ int run(Node* commands) {
 	if(dup2(original_stdin, STDIN_FILENO) != -1)
 		close(original_stdin);
 	//fflush(stdout);
+
+	return 0;
 }
