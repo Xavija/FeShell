@@ -17,12 +17,8 @@
 #define MODE_IN 4
 
 typedef struct {
-	char 	operand[CMD_LENGTH];
-	int		has_operand;
 	char 	*args[CMD_LENGTH];			// CMD_LENGTH-1 argomenti max (il primo è l'operando), ciascuno lungo max CMD_LENGTH
 	int 	arg_count;
-	char	path[CMD_LENGTH];
-	int 	has_path;
 	char 	file_in[CMD_LENGTH],
 			file_out[CMD_LENGTH];
 	int 	redirect_mode[4];				/*	0 - niente
@@ -44,16 +40,12 @@ void clear(void);
 Node* appendNode(Node* *head);
 /*Inizializza un nodo come vuoto*/
 void initEmptyNode(Node* node);
-/*Registra un operando nella struttura dati di un comando*/
-void addOperand(_cmd* cmd, char* op);
 /*Aggiunge un argomento alla struttura dati di un comando*/
 int  appendArg(_cmd* cmd, char* arg);
 /*Imposta il flag di redirect*/
 int  setRedirectMode(_cmd* cmd, int mode);
 /*Registra un file indicato per il redirect*/
 void addFile(_cmd* cmd, char* file, int redirect_mode);
-/*Registra eventuale path indicato per ls()*/
-void addPath(_cmd* cmd, char* path);
 Node* reachListHead(Node* list);
 Node* parse(char* string);
 int  run(Node* commands);
@@ -82,8 +74,6 @@ Node* appendNode(Node* *head) {
 
 void initEmptyNode(Node* node) {
 	node->command.arg_count 	= 0;
-	node->command.has_operand 	= 0;
-	node->command.has_path 		= 0;
 	
 	for(int i = 0; i < 4; i++)
 		node->command.redirect_mode[i] = 0;
@@ -94,15 +84,8 @@ void initEmptyNode(Node* node) {
 	node->command.piped 		= 0;
  */
 	bzero(node->command.args, CMD_LENGTH);
-	bzero(node->command.operand, CMD_LENGTH);
-	bzero(node->command.path, CMD_LENGTH);
 	bzero(node->command.file_in, CMD_LENGTH);
 	bzero(node->command.file_out, CMD_LENGTH);
-}
-
-void addOperand(_cmd* cmd, char* op) {
-	strcpy(cmd->operand, op);
-	cmd->has_operand = 1;
 }
 
 int appendArg(_cmd* cmd, char* arg) {
@@ -112,13 +95,6 @@ int appendArg(_cmd* cmd, char* arg) {
 	cmd->args[cmd->arg_count] = arg;
 	cmd->arg_count++;
 	return 0;
-}
-
-void addPath(_cmd* cmd, char* path) {
-	if(cmd->has_path)
-		return;
-	strcpy(cmd->path, path);
-	cmd->has_path = 1;
 }
 
 int setRedirectMode(_cmd* cmd, int mode) { 
@@ -146,8 +122,7 @@ void clear() {
 }
 
 int getArgCount(_cmd* cmd) 		{ return cmd->arg_count;   	 }
-int hasPath(_cmd* cmd) 			{ return cmd->has_path;  	 }
-int hasOperand(_cmd* cmd) 		{ return cmd->has_operand; 	 }
+int hasOperand(_cmd* cmd) 		{ if(getArgCount(cmd) >= 1) return 1; else return 0; 	 }
 int getRedirectMode(_cmd* cmd) 	{ return cmd->redirect_mode; }
 
 int execute(Node* commands);
@@ -181,7 +156,7 @@ int main() {
 			deleteList(commands);
 
 			if(result == -1)
-				fprintf(stderr, "Errore durante l'esecuzione\n");
+				fprintf(stderr, "Esecuzione non riuscita\n");
 		}
 		
 		setbuf(stdin, NULL); // non sembra, ma *funziona*
@@ -207,7 +182,6 @@ Node* parse(char* string) {
 		  flag_append 	= 0,
 		  flag_in 		= 0,
 		  flag_pipe 	= 0;
-		  
 	char* tok;
 
 	int preserve_ls_path = 0;		// flag per prevenire che eventuale path specificato per ls
@@ -264,11 +238,13 @@ Node* parse(char* string) {
 			}
 
 			if(!hasOperand(&commands->command))						// se il nodo cmd non ha un comando, lo inserisco
-				addOperand(&commands->command, tok);
+				appendArg(&commands->command, tok);
+			else
 
-			if(!strcmp(commands->command.operand, "ls") 			// controlli per non inserire il path di ls nel posto sbagliato
+
+			/* if(!strcmp(commands->command.args[0], "ls") 			// controlli per non inserire il path di ls nel posto sbagliato
 				&& tok[0] != '-' 
-					&& getArgCount(&commands->command) > 0 
+					&& getArgCount(&commands->command) >= 1 
 						&& redirect_mode == MODE_NONE) {
 
 				if(hasPath(&commands->command)) {
@@ -279,10 +255,10 @@ Node* parse(char* string) {
 					preserve_ls_path = 1;
 				}
 			} 
-
-			if(preserve_ls_path) {
+ */
+			/* if(preserve_ls_path) {
 				preserve_ls_path = 0;
-			} else if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
+			} else  */if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
 				if(appendArg(&commands->command, tok)) {
 					fprintf(stderr, "sono stati indicati troppi argomenti\n");
 					return NULL;
@@ -304,7 +280,7 @@ Node* parse(char* string) {
 }
 
 Node* reachListHead(Node* list) {
-	while(list->prev != NULL)						// mi assicuro che la lista parta dall'elemento iniziale (prev=NULL)
+	while(list->prev != NULL)												// mi assicuro che la lista parta dall'elemento iniziale (prev=NULL)
 		list = list->prev;
 	
 	return list;
@@ -344,7 +320,7 @@ void execCmd(char* *args) {
 }
 
 void chooseProvider(_cmd* cmd) {
-	if(!strcmp(cmd->operand, "cd")) {
+	if(!strcmp(cmd->args[0], "cd")) {
 		//bzero(cmd->args, 1);
 		//int dir = chdir(cmd->args);
 		;
@@ -374,9 +350,9 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 			}
 			if(dupRedirect(fd[1], STDOUT_FILENO) == -1)
 				exit(-1);
-			execvp(command->operand, command->args);
+			execvp(command->args[0], command->args);
 			
-			fprintf(stderr, "%s: comando non riconosciuto", command->operand); // se exec fallisce
+			fprintf(stderr, "%s: comando non riconosciuto", command->args[0]); // se exec fallisce
 			exit(1);
 		} else if(pid > 0) { 				// padre
 			int status;
@@ -446,7 +422,8 @@ int run(Node* commands) {
 	int original_stdout = dup(STDOUT_FILENO);
 	//close(original_stdout);
 	
-	int	in_set  = 0;
+	int	in_set  = 0,
+		from_pipe = 0;
 
 	for(; commands != NULL; commands = commands->next) {
 		if(commands->command.redirect_mode[MODE_IN-1] == MODE_IN) {
@@ -454,8 +431,13 @@ int run(Node* commands) {
 			
 			in = open(commands->command.file_in, O_RDONLY);
 
-			if(in == -1)
+			if(in == -1) {
+				if(dup2(original_stdout, STDOUT_FILENO) != -1)
+						close(original_stdout);
+					if(dup2(original_stdin, STDIN_FILENO) != -1)
+						close(original_stdin);
 				return -1;
+			}
 			
 			dup2(in, STDIN_FILENO);
 			close(in);
@@ -466,23 +448,59 @@ int run(Node* commands) {
 
 		if(commands->command.redirect_mode[MODE_OUT-1] == MODE_OUT) {
 			out = redirectCommand(commands->command.file_out, MODE_OUT);
-			if(out == -1)
+			if(out == -1){
+				if(dup2(original_stdout, STDOUT_FILENO) != -1)
+					close(original_stdout);
+				if(dup2(original_stdin, STDIN_FILENO) != -1)
+					close(original_stdin);
 				return -1;
+			}
+				
 		} else if(commands->command.redirect_mode[MODE_APPEND-1] == MODE_APPEND) {
 			out = redirectCommand(commands->command.file_out, MODE_APPEND);
-			if(out == -1)
+			if(out == -1) {
+				if(dup2(original_stdout, STDOUT_FILENO) != -1)
+					close(original_stdout);
+				if(dup2(original_stdin, STDIN_FILENO) != -1)
+					close(original_stdin);
 				return -1;
+			}
 		}
 
 		if(commands->command.redirect_mode[MODE_PIPE-1] == MODE_PIPE) {
+			if(in_set) {
+				if(dup2(original_stdout, STDOUT_FILENO) != -1)
+					close(original_stdout);
+				if(dup2(original_stdin, STDIN_FILENO) != -1)
+					close(original_stdin);
+				return -1;
+			}
 			in = pipeCommand(&commands->command, in, in_set);
 			in_set = 0;
+			from_pipe = 1;
 		} else {
 			if(!in_set) {
-				if(dupRedirect(in, STDIN_FILENO) == -1)
+				
+				if(dupRedirect(in, STDIN_FILENO) == -1) {
+					if(dup2(original_stdout, STDOUT_FILENO) != -1)
+						close(original_stdout);
+					if(dup2(original_stdin, STDIN_FILENO) != -1)
+						close(original_stdin);
+				
 					return -1;
+				}
+			} else if(from_pipe) {
+				fprintf(stderr, "errore di sintassi\n");
+
+				if(dup2(original_stdout, STDOUT_FILENO) != -1)
+						close(original_stdout);
+					if(dup2(original_stdin, STDIN_FILENO) != -1)
+						close(original_stdin);
+
+				return -1;
 			}
 			chooseProvider(&commands->command);
+			from_pipe = 0;
 		}
 	}
 
