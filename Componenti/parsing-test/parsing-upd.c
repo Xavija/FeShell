@@ -54,7 +54,7 @@ int  setRedirectMode(_cmd* cmd, int mode);
 void addFile(_cmd* cmd, char* file, int redirect_mode);
 /*Registra eventuale path indicato per ls()*/
 void addPath(_cmd* cmd, char* path);
-Node* reachListHead(Node* commands);
+Node* reachListHead(Node* list);
 Node* parse(char* string);
 int  run(Node* commands);
 
@@ -183,10 +183,7 @@ int main() {
 			if(result == -1)
 				fprintf(stderr, "Errore durante l'esecuzione\n");
 		}
-		/* if(parse_val != 0) {
-			printf("Errore durante il parsing\n");
-			//STDERR
-		} */
+		
 		setbuf(stdin, NULL); // non sembra, ma *funziona*
 	}
 	return 0;
@@ -210,6 +207,7 @@ Node* parse(char* string) {
 		  flag_append 	= 0,
 		  flag_in 		= 0,
 		  flag_pipe 	= 0;
+		  
 	char* tok;
 
 	int preserve_ls_path = 0;		// flag per prevenire che eventuale path specificato per ls
@@ -305,11 +303,11 @@ Node* parse(char* string) {
 	return commands;							// e ne restituisco il puntatore
 }
 
-Node* reachListHead(Node* commands) {
-	while(commands->prev != NULL)												// mi assicuro che la lista parta dall'elemento iniziale (prev=NULL)
-		commands = commands->prev;
+Node* reachListHead(Node* list) {
+	while(list->prev != NULL)						// mi assicuro che la lista parta dall'elemento iniziale (prev=NULL)
+		list = list->prev;
 	
-	return commands;
+	return list;
 }
 
 int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'originale
@@ -324,7 +322,7 @@ int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'or
 	}
 }
 
-int execCmd(char* *args) {
+void execCmd(char* *args) {
 	pid_t pid;
 
 	pid = fork();
@@ -338,6 +336,10 @@ int execCmd(char* *args) {
 	} else if(pid > 0) { 				// padre
 		int status;
 		waitpid(pid, &status, 0);
+		if(WIFEXITED(status)) {
+			printf("[%d] TERMINATED (Status: %d)\n",
+			pid, WEXITSTATUS(status));
+		}
 	}
 }
 
@@ -379,7 +381,10 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 		} else if(pid > 0) { 				// padre
 			int status;
 			waitpid(pid, &status, 0);					// attendo il figlio
-			
+			if(WIFEXITED(status)) {
+				printf("[%d] TERMINATED (Status: %d)\n",
+				pid, WEXITSTATUS(status));
+			}
 			close(fd[1]);								// chiusura lato WRITE inutilizzato
 			close(in);									// chiusura lato READ inutilizzato della pipe precedente
 			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
