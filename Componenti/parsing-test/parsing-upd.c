@@ -26,7 +26,7 @@ typedef struct {
 												2 - out
 												3 - append
 												4 - in */
-			// redirect_mode { MODE_NONE, MODE_PIPE, MODE_OUT, MODE_APPEND, MODE_IN }
+			// redirect_mode { MODE_PIPE, MODE_OUT, MODE_APPEND, MODE_IN }
 } _cmd;									// struct rappresentante un singolo comando
 typedef struct _node { 
 	_cmd command; 
@@ -78,11 +78,6 @@ void initEmptyNode(Node* node) {
 	for(int i = 0; i < 4; i++)
 		node->command.redirect_mode[i] = 0;
 	
-	/* node->command.in 			= 0;
-	node->command.append 		= 0;
-	node->command.out 			= 0;
-	node->command.piped 		= 0;
- */
 	bzero(node->command.args, CMD_LENGTH);
 	bzero(node->command.file_in, CMD_LENGTH);
 	bzero(node->command.file_out, CMD_LENGTH);
@@ -146,7 +141,6 @@ int main() {
 	Node* commands;
 	int result;
 
-	//clear();
 	while (1) {
 		message();
 		if (getline(&buffer, &dim, stdin) == -1 || feof(stdout)) {	// input
@@ -154,17 +148,22 @@ int main() {
 			exit(0);
 		}
 
-		if(strstr(buffer, "exit")) {
-			free(buffer);
-			exit(0);
-		} else if(strstr(buffer, "clear")) {
-			clear();
-		} else if((commands = parse(buffer)) != NULL) {
-			result = run(commands);
-			deleteList(commands);
+		if((commands = parse(buffer)) != NULL) {
+			if(!strcmp(commands->command.args[0], "exit")) {
+				deleteList(commands);
+				free(buffer);
+				exit(0);
+			} else if(!strcmp(commands->command.args[0], "clear")) {
+				clear();
+			} else if(!strcmp(commands->command.args[0], "cd")) {
+				changeWorkingDirectory(commands->command.args[1]);
+			} else {
+				result = run(commands);
+				deleteList(commands);
 
-			if(result == -1)
-				fprintf(stderr, "Esecuzione non riuscita\n");
+				if(result == -1)
+					fprintf(stderr, "Esecuzione non riuscita\n");
+			}
 		}
 		
 		setbuf(stdin, NULL); // non sembra, ma *funziona*
@@ -247,27 +246,7 @@ Node* parse(char* string) {
 
 			if(!hasOperand(&commands->command))						// se il nodo cmd non ha un comando, lo inserisco
 				appendArg(&commands->command, tok);
-			else
-
-
-			/* if(!strcmp(commands->command.args[0], "ls") 			// controlli per non inserire il path di ls nel posto sbagliato
-				&& tok[0] != '-' 
-					&& getArgCount(&commands->command) >= 1 
-						&& redirect_mode == MODE_NONE) {
-
-				if(hasPath(&commands->command)) {
-					fprintf(stderr, "troppi argomenti per ls\n");
-					return NULL;
-				} else {
-					addPath(&commands->command, tok);
-					preserve_ls_path = 1;
-				}
-			} 
- */
-			/* if(preserve_ls_path) {
-				preserve_ls_path = 0;
-			} else  */
-			if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
+			else if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) { // altrimenti, se non devo inserire un file, inserisco gli argomenti
 				if(appendArg(&commands->command, tok)) {
 					fprintf(stderr, "sono stati indicati troppi argomenti\n");
 					return NULL;
@@ -309,27 +288,6 @@ int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'or
 	return 0;
 }
 
-void execCmd(char* *args) {
-	pid_t pid;
-
-	pid = fork();
-	if(pid == -1) {
-		fprintf(stderr, "operazione di fork non riuscita\n");
-		return -1;
-	} else if(pid == 0) { 	// figlio
-		execvp(args[0], args);
-		fprintf(stderr, "%s: comando non riconosciuto\n", args[0]);
-		exit(1);
-	} else if(pid > 0) { 				// padre
-		int status;
-		waitpid(pid, &status, 0);
-		if(WIFEXITED(status)) {
-			printf("[%d] TERMINATED (Status: %d)\n",
-			pid, WEXITSTATUS(status));
-		}
-	}
-}
-
 void changeWorkingDirectory(char* dir) {
 	if (dir == NULL) 
 		chdir(getenv("HOME")); 
@@ -341,11 +299,10 @@ void changeWorkingDirectory(char* dir) {
 }
 
 void chooseProvider(_cmd* cmd) {
-	if(!strcmp(cmd->args[0], "cd")) {
-		changeWorkingDirectory(cmd->args[1]);
-	} else {
-		execCmd(cmd->args);
-	}
+	// ls()
+	execvp(cmd->args[0], cmd->args);
+	fprintf(stderr, "%s: comando non riconosciuto\n", cmd->args[0]);
+	exit(1);
 }
 
 int pipeCommand(_cmd* command, int in, int from_file) {
@@ -367,8 +324,9 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 				exit(-1);
 			}
 			// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
-			execvp(command->args[0], command->args);	// esecuzione effettiva del comando indicato
 			
+			chooseProvider(command);
+
 			fprintf(stderr, "%s: comando non riconosciuto", command->args[0]); // se exec fallisce
 			exit(1);
 		} else if(pid > 0) { 				// padre
@@ -466,7 +424,22 @@ int run(Node* commands) {
 					return -1;
 				}
 			}
-			chooseProvider(&commands->command);
+
+			pid_t pid;
+			pid = fork();
+			if(pid == 0) {
+				chooseProvider(&commands->command); 		// figlio esegue
+			} else if(pid > 0) {
+				int status;
+				waitpid(pid, &status, 0);					// attendo il figlio
+			} else if(pid == -1) {
+				fprintf(stderr, "operazione di fork non riuscita\n");
+				exit(-1);
+			} else {
+				fprintf(stderr, "errore nel processo padre\n");
+				exit(-2);
+			}
+
 			from_pipe = 0;
 		}
 	}
