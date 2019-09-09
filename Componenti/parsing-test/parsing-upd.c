@@ -19,8 +19,8 @@
 typedef struct {
 	char 	*args[CMD_LENGTH];			// CMD_LENGTH-1 argomenti max (il primo è l'operando), ciascuno lungo max CMD_LENGTH
 	int 	arg_count;
-	char 	file_in[CMD_LENGTH],
-			file_out[CMD_LENGTH];
+	char 	file_in[FILENAME_MAX],
+			file_out[FILENAME_MAX];
 	int 	redirect_mode[4];				/*	0 - niente
 												1 - piped
 												2 - out
@@ -100,7 +100,7 @@ int appendArg(_cmd* cmd, char* arg) {
 int setRedirectMode(_cmd* cmd, int mode) { 
 	// imposta a 1 l'elemento di posizione MODE_* corrispondente ad una specifica modalità di redirect
 	if(mode == MODE_PIPE||mode == MODE_OUT||mode == MODE_APPEND||mode == MODE_IN)
-		cmd->redirect_mode[mode-1] = mode;
+		cmd->redirect_mode[mode-1] = 1;
 	else {
 		return 1;
 		// stderr
@@ -127,6 +127,14 @@ int getRedirectMode(_cmd* cmd) 	{ return cmd->redirect_mode; }
 
 int execute(Node* commands);
 
+void message() {
+	char cwd[FILENAME_MAX];
+	if(getcwd(cwd, FILENAME_MAX) != NULL) 
+		printf("\n%s $ ", cwd);
+	else
+		printf("\n>> ");
+}
+
 int main() {
 	char* 	buffer = (char*) malloc(sizeof(char)*BUFSIZ);	// input buffer
 	if(buffer == NULL) {
@@ -140,7 +148,7 @@ int main() {
 
 	//clear();
 	while (1) {
-		printf("\n>> ");
+		message();
 		if (getline(&buffer, &dim, stdin) == -1 || feof(stdout)) {	// input
 			free(buffer);
 			exit(0);
@@ -187,7 +195,7 @@ Node* parse(char* string) {
 	int preserve_ls_path = 0;		// flag per prevenire che eventuale path specificato per ls
 									// venga inserito tra gli argomenti dello stesso
 	int limit_file = 0;				// flag per prevenire l'inserimento di più di un file per redirect
-	int redirect_mode = 0;
+	int redirect_mode = MODE_NONE;
 	commands = appendNode(&commands);	// elemento iniziale (vuoto)
 
 	tok = strtok(string, STRTOK_RESTRICT_DELIM);
@@ -221,13 +229,13 @@ Node* parse(char* string) {
 		} else if(strpbrk(tok, ">|<") == NULL) {
 			if(redirect_mode != MODE_NONE) {			// se nell'iterazione precedente c'è stato un carattere speciale, iniziano i controlli
 				if(hasOperand(&commands->command)) {
-					setRedirectMode(&commands->command, redirect_mode);
-					switch(redirect_mode) {
-						case MODE_PIPE:											// per una pipe non mi aspetto un file in input
+					setRedirectMode(&commands->command, redirect_mode); 		// registro la modalità nel comando corrente
+					switch(redirect_mode) {										// e la processo:
+						case MODE_PIPE:											// per una pipe non mi aspetto di dover aggiungere un file in input
 							redirect_mode = MODE_PIPE;
 							commands = appendNode(&commands);
 							break;		
-						default:												// mentre per un redirect sì
+						default:												// mentre per un redirect stdin/out sì
 							addFile(&commands->command, tok, redirect_mode);
 							break;
 					}
@@ -258,13 +266,15 @@ Node* parse(char* string) {
  */
 			/* if(preserve_ls_path) {
 				preserve_ls_path = 0;
-			} else  */if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
+			} else  */
+			if(redirect_mode == MODE_NONE || redirect_mode == MODE_PIPE) {
 				if(appendArg(&commands->command, tok)) {
 					fprintf(stderr, "sono stati indicati troppi argomenti\n");
 					return NULL;
 				}
 			} 
-			if(redirect_mode != MODE_NONE)
+
+			if(redirect_mode != MODE_NONE)	// reset per prossimo token
 				redirect_mode = MODE_NONE;
 
 		} else {
@@ -292,10 +302,11 @@ int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'or
 			close(source);
 			return 0;
 		} else {
-			fprintf(stderr, "duplicazione del file descriptor non riuscita\n");
+			//fprintf(stderr, "duplicazione del file descriptor non riuscita\n");
 			return -1;
 		}
 	}
+	return 0;
 }
 
 void execCmd(char* *args) {
@@ -319,14 +330,21 @@ void execCmd(char* *args) {
 	}
 }
 
+void changeWorkingDirectory(char* dir) {
+	if (dir == NULL) 
+		chdir(getenv("HOME")); 
+	else { 
+		if (chdir(dir) == -1) {
+			fprintf(stderr, "%s: percorso inesistente\n", dir);
+		}
+	}
+}
+
 void chooseProvider(_cmd* cmd) {
 	if(!strcmp(cmd->args[0], "cd")) {
-		//bzero(cmd->args, 1);
-		//int dir = chdir(cmd->args);
-		;
+		changeWorkingDirectory(cmd->args[1]);
 	} else {
 		execCmd(cmd->args);
-		; // execvp()
 	}
 }
 
@@ -338,29 +356,25 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 		pid = fork();
 		if(pid == 0) {						// figlio
 			close(fd[0]);								// chiusura del lato READ inutilizzato del fd `fd[0]`
-			/* dupRedirect(in, STDIN_FILENO);			// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
-			dupRedirect(fd[1], STDOUT_FILENO);			// duplicazione del file descriptor fd[1] (WRITE) e successiva chiusura dell'originale
-														// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
-			execvp(command->operand, command->args);	// esecuzione del comando 
-			*/
 			
-			if(!from_file) {	// se ho aperto un file in input non effettuo la duplicazione del fd di nuovo
-				if(dupRedirect(in, STDIN_FILENO) == -1)
-					exit(-1);
-			}
-			if(dupRedirect(fd[1], STDOUT_FILENO) == -1)
+			if(dupRedirect(in, STDIN_FILENO) == -1) { 	// duplicazione del file descriptor in (READ) e successiva chiusura dell'originale
+				fprintf(stderr, "duplicazione della pipe in non riuscita\n");
 				exit(-1);
-			execvp(command->args[0], command->args);
+			}
+			
+			if(dupRedirect(fd[1], STDOUT_FILENO) == -1) { // duplicazione del file descriptor fd[1] (WRITE) e successiva chiusura dell'originale
+				fprintf(stderr, "duplicazione della pipe out non riuscita\n");
+				exit(-1);
+			}
+			// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
+			execvp(command->args[0], command->args);	// esecuzione effettiva del comando indicato
 			
 			fprintf(stderr, "%s: comando non riconosciuto", command->args[0]); // se exec fallisce
 			exit(1);
 		} else if(pid > 0) { 				// padre
 			int status;
 			waitpid(pid, &status, 0);					// attendo il figlio
-			if(WIFEXITED(status)) {
-				printf("[%d] TERMINATED (Status: %d)\n",
-				pid, WEXITSTATUS(status));
-			}
+
 			close(fd[1]);								// chiusura lato WRITE inutilizzato
 			close(in);									// chiusura lato READ inutilizzato della pipe precedente
 			in = fd[0];									// copio il fd lato READ in `in` in modo tale da far leggere qui al prossimo comando
@@ -379,136 +393,86 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 	return in;											// return di in per aggiornamento del fd lato READ per il prossimo comando
 }
 
-int redirectCommand(char* file, int mode) {
-	int old_fd, new_fd;
-	switch(mode) {
-		case MODE_OUT:
-			old_fd = open(file, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR);
-			new_fd = STDOUT_FILENO;
-			break;
-		case MODE_APPEND:
-			old_fd = open(file, O_APPEND|O_WRONLY);
-			new_fd = STDOUT_FILENO;
-			break;
-		case MODE_IN:
-			old_fd = open(file, O_RDONLY);
-			new_fd = STDIN_FILENO;
-			break;
-		default:
-			fprintf(stderr, "errore durante l'apertura del file %s\n", file);
-			return -1;
-			break;
-	}
-	if(old_fd == -1) { // open fail
-		fprintf(stderr, "errore durante l'apertura del file %s\n", file);
-		return -1;
-	} else {
-		if(dup2(old_fd, new_fd) == -1) {
-			fprintf(stderr, "duplicazione del file descriptor non riuscita\n");
-			return -1; // dup2 fail
-		}
-		close(old_fd);
-		return old_fd;
-	}
-}
-
 int run(Node* commands) {
-	// TODO:
-	// print stderr
+
+	/*
+	run esegue ogni comando presente nella lista di comandi passata come argomento;
+	restituisce 0 se l'esecuzione è avvenuta senza problemi, -1 altrimenti.
+	*/
+
+	int in  = STDIN_FILENO;										// fd READ originale
+	int out;									
+	int original_stdin  = dup(in);								// backup di stdin e stdout originali
+	int original_stdout = dup(out);
 	
-	int in  = STDIN_FILENO;														// fd READ originale
-	int out = STDOUT_FILENO;
-	int original_stdin  = dup(STDIN_FILENO);
-	int original_stdout = dup(STDOUT_FILENO);
-	//close(original_stdout);
-	
-	int	in_set  = 0,
-		from_pipe = 0;
+	int	in_set  = 0,											// flag per redirect in
+		from_pipe = 0;											// flag per informare che l'ultimo comando eseguito viene da una pipe
 
 	for(; commands != NULL; commands = commands->next) {
-		if(commands->command.redirect_mode[MODE_IN-1] == MODE_IN) {
-			//in = redirectCommand(commands->command.file_in, MODE_IN); // BUG per `cat < in | wc`: fd non aperto, bad dup2()
-			
+		if(commands->command.redirect_mode[MODE_IN-1]) {	// redirect STDIN <
 			in = open(commands->command.file_in, O_RDONLY);
-
-			if(in == -1) {
-				if(dup2(original_stdout, STDOUT_FILENO) != -1)
-						close(original_stdout);
-					if(dup2(original_stdin, STDIN_FILENO) != -1)
-						close(original_stdin);
+			if(in < 0) {
+				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
 				return -1;
 			}
-			
-			dup2(in, STDIN_FILENO);
-			close(in);
 
 			in_set = 1;
-			
 		}
 
-		if(commands->command.redirect_mode[MODE_OUT-1] == MODE_OUT) {
-			out = redirectCommand(commands->command.file_out, MODE_OUT);
-			if(out == -1){
-				if(dup2(original_stdout, STDOUT_FILENO) != -1)
-					close(original_stdout);
-				if(dup2(original_stdin, STDIN_FILENO) != -1)
-					close(original_stdin);
+		if(commands->command.redirect_mode[MODE_OUT-1]) {	// redirect STDOUT >
+			out = open(commands->command.file_out, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR);
+			if(out < 0) {
+				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
 				return -1;
 			}
+			if(dup2(out, STDOUT_FILENO) == -1) {
+				dupRedirect(original_stdin, STDIN_FILENO);
+				dupRedirect(original_stdout, STDOUT_FILENO);
+				return -1;
+			} else
+				close(out);
 				
-		} else if(commands->command.redirect_mode[MODE_APPEND-1] == MODE_APPEND) {
-			out = redirectCommand(commands->command.file_out, MODE_APPEND);
-			if(out == -1) {
-				if(dup2(original_stdout, STDOUT_FILENO) != -1)
-					close(original_stdout);
-				if(dup2(original_stdin, STDIN_FILENO) != -1)
-					close(original_stdin);
+		} else if(commands->command.redirect_mode[MODE_APPEND-1]) { // redirect STDOUT >>
+			out = open(commands->command.file_out, O_WRONLY|O_APPEND);
+			if(out < 0) {
+				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
 				return -1;
 			}
+			if(dup2(out, STDOUT_FILENO) == -1) {
+				dupRedirect(original_stdin, STDIN_FILENO);
+				dupRedirect(original_stdout, STDOUT_FILENO);
+				return -1;
+			} else
+				close(out);
 		}
 
-		if(commands->command.redirect_mode[MODE_PIPE-1] == MODE_PIPE) {
-			if(in_set) {
-				if(dup2(original_stdout, STDOUT_FILENO) != -1)
-					close(original_stdout);
-				if(dup2(original_stdin, STDIN_FILENO) != -1)
-					close(original_stdin);
-				return -1;
-			}
+		if(commands->command.redirect_mode[MODE_PIPE-1]) {
 			in = pipeCommand(&commands->command, in, in_set);
 			in_set = 0;
 			from_pipe = 1;
 		} else {
-			if(!in_set) {
-				
-				if(dupRedirect(in, STDIN_FILENO) == -1) {
-					if(dup2(original_stdout, STDOUT_FILENO) != -1)
-						close(original_stdout);
-					if(dup2(original_stdin, STDIN_FILENO) != -1)
-						close(original_stdin);
-				
-					return -1;
-				}
-			} else if(from_pipe) {
+			if(from_pipe && in_set) {	// se il comando precedente era in pipe al comando corrente
+										// e quest'ulimo ha un file in input
 				fprintf(stderr, "errore di sintassi\n");
 
-				if(dup2(original_stdout, STDOUT_FILENO) != -1)
-						close(original_stdout);
-					if(dup2(original_stdin, STDIN_FILENO) != -1)
-						close(original_stdin);
-
+				dupRedirect(original_stdin, STDIN_FILENO);
+				dupRedirect(original_stdout, STDOUT_FILENO);
+ 
 				return -1;
+			} else {
+				if(dupRedirect(in, STDIN_FILENO) == -1) { // redirect in (da pipe O file in)
+					dupRedirect(original_stdin, STDIN_FILENO);
+					dupRedirect(original_stdout, STDOUT_FILENO);
+					return -1;
+				}
 			}
 			chooseProvider(&commands->command);
 			from_pipe = 0;
 		}
 	}
 
-	if(dup2(original_stdout, STDOUT_FILENO) != -1)
-		close(original_stdout);
-	if(dup2(original_stdin, STDIN_FILENO) != -1)
-		close(original_stdin);
-	//fflush(stdout);
-
+	dupRedirect(original_stdin, STDIN_FILENO);			// ripristino di stdin e stdout originali
+	dupRedirect(original_stdout, STDOUT_FILENO);		// in questo modo si evita un "output sospeso"
+														// o l'output di un comando come input
 	return 0;
 }
