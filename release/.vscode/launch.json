@@ -1,0 +1,8 @@
+{
+    "name": "GDB",
+    "type": "gdb",
+    "request": "launch",
+    "cwd": "${workspaceRoot}",
+    "target": "${workspaceRoot}/feshell"
+        
+}

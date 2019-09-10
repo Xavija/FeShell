@@ -24,20 +24,20 @@ int main(int argc, char* argv[]) {
 			exit(0);
 		}
 
-		if(!strcmp(buffer, "\n")) 
+		if(!strcmp(buffer, "\n")) 			// input vuoto (invio)
 			continue;
 
 		if((commands = parse(buffer)) != NULL) {
-			if(!strcmp(commands->command.args[0], "exit")) {
+			if(!strcmp(commands->command.args[0], "exit")) {			// exit
 				deleteList(commands);
 				free(buffer);
 				exit(0);
-			} else if(!strcmp(commands->command.args[0], "clear")) {
+			} else if(!strcmp(commands->command.args[0], "clear")) {   	// clear
 				clear();
-			} else if(!strcmp(commands->command.args[0], "cd")) {
+			} else if(!strcmp(commands->command.args[0], "cd")) {		// cd
 				changeWorkDirectory(commands->command.args[1]);
 			} else {
-				result = run(commands);
+				result = run(commands);									// comandi inseriti
 				deleteList(commands);
 
 				if(result == -1)
@@ -45,8 +45,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		
-		setbuf(stdin, NULL); // non sembra, ma *funziona*
+		setbuf(stdin, NULL);											// "flush" di stdin per prevenire buffer overflow
 	}
-
 	return 0;
 }

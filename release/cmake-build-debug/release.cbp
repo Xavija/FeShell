@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="release"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="release">
+				<Option output="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/release" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/9/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/9/include-fixed"/>
+					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 release"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="release/fast">
+				<Option output="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/release" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/9/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-linux-gnu/9/include-fixed"/>
+					<Add directory="/usr/include/x86_64-linux-gnu"/>
+					<Add directory="/usr/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 release/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/src/shell.c">
+			<Option target="release"/>
+		</Unit>
+		<Unit filename="/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

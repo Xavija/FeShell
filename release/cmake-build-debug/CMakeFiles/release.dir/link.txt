@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/release.dir/src/shell.c.o  -o release 

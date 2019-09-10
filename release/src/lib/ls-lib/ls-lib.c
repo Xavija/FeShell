@@ -22,6 +22,7 @@ void print_mod(__mode_t mode) {
 	*/
 
 	int p = mode&0777;								// conversione dei permessi in ottale
+	printf((S_ISDIR(mode)) ? "d" : "-");
 	printf((p & S_IRUSR) ? "r" : "-");				// USER
 	printf((p & S_IWUSR) ? "w" : "-");
 	printf((p & S_IXUSR) ? "x" : "-");
@@ -33,7 +34,7 @@ void print_mod(__mode_t mode) {
 	printf((p & S_IXOTH) ? "x" : "-");
 }
 
-int file_count(char d[]) {
+int file_count(char *d) {
 	/*
 		Resituisce il numero di entry contenute nella directory fornita come parametro.
 		Accetta:	directory 	`char d[]`
@@ -45,12 +46,15 @@ int file_count(char d[]) {
 	if((directory = opendir(d)) != NULL) {
 		while(readdir(directory) != NULL) 
 			n++;
+	} else {
+		printf("ls: %s (%s)\n", strerror(errno), d);
+		return -1;
 	}
 
 	return n;
 }
 
-int visible_file_count(char d[]) {
+int visible_file_count(char *d) {
 	/*
 		Restituisce il numero di entry visibili contenute nella directory fornita come parametro.
 		Accetta:	directory 	`char d[]`
@@ -64,6 +68,9 @@ int visible_file_count(char d[]) {
 		while((entry = readdir(directory)) != NULL) 
 			if(entry->d_name[0] != '.')
 				n++;
+	} else {
+		printf("ls: %s (%s)\n", strerror(errno), d);
+		return -1;
 	}
 
 	return n;
@@ -226,27 +233,25 @@ int scan_dir(char* path, file_fe* files, int all) {
 			}
 		}
 	} else {
-		printf("ls: errore: %s\n", strerror(errno));
-		return 1;
+		printf("ls: %s (%s)\n", strerror(errno), path);
+		return -1;
 	}
 
 	return 0;
 }
 
-int ls(char* args[], int arg_count) {
-    printf("cio");
+int ls(char* param[]) {
 	file_fe *files;
 	int 	flag_all,
 			n,
 			i;
 
-	char* path = NULL;
-    char* param = "lath";
+	/* if(path == NULL || !strcmp(path, ""))					// controllo sul percorso
+		strcpy(path, ".");
+		//path = "."; */
+	char *path = ".";
 
-	if(path == NULL)					// controllo sul percorso
-		path = '.';
-
-	if(strchr(param, 'a') != NULL) {	// controllo sul flag -a
+	if(strpbrk(param, "a") != NULL) {	// controllo sul flag -a
 		flag_all = 1;
 		n = file_count(path);			// conta tutti i file
 	} else {
@@ -254,15 +259,20 @@ int ls(char* args[], int arg_count) {
 		n = visible_file_count(path);	// conta i file visibili
 	}
 
+	if(n == -1) {
+		return -1;
+	}
+
+
 	files = malloc(sizeof(file_fe)*n);	// array che conterrà nome e data ultima modifica delle entry della directory
 
-	if(scan_dir(path, files, flag_all))
+	if(scan_dir(path, files, flag_all) == -1)
 		return -1;							// errore (in scan_dir nel dettaglio)
 
-	if(strchr(param, 't'))
+	if(strpbrk(param, "t"))
 		sort_by_mtime(files, n);
 
-	if(strchr(param, 'h'))
+	if(strpbrk(param, "h"))
 		humanize(files, n);
 
 	if(strpbrk(param, "l")) {
@@ -273,6 +283,6 @@ int ls(char* args[], int arg_count) {
 			printf("%s\t", files[i].name);
 	}
 	
-	printf("\n");
+	return 0;
 
 }
