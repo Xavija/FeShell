@@ -1,1 +1,7 @@
-lib  Makefile  out  shell.c  shell.o  src
+shell.o
+shell.c
+src
+out
+Makefile
+core
+lib

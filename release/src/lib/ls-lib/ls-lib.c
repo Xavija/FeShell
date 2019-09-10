@@ -280,7 +280,7 @@ int ls(char* param[]) {
 			print_long(&files[i]);
 	} else {
 		for(i = 0; i < n; i++)
-			printf("%s\t", files[i].name);
+			printf("%s\n", files[i].name);
 	}
 	
 	return 0;

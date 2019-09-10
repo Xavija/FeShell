@@ -31,7 +31,7 @@ void message() {
 		printf("\n>> ");
 }
 
-int chooseProvider(_cmd* cmd, int from_pipe) {
+int chooseProvider(_cmd* cmd) {
 	if(!strcmp(cmd->args[0], "ls")) { 									// recupero eventuali parametri per ls
 		int j = 0;
 		for(int i = 1; i < getArgCount(cmd); i++) {						// i = 1, args[0] = "ls"
@@ -46,31 +46,13 @@ int chooseProvider(_cmd* cmd, int from_pipe) {
 			result = ls("");
 		else
 			result = ls(cmd->args[j]);
-		return result;
+		exit(result);
 	} else {
-		if(from_pipe) {
+	
 			execvp(cmd->args[0], cmd->args);
 			fprintf(stderr, "%s: comando non riconosciuto\n", cmd->args[0]);
 			exit(1);
-		} else {
-			pid_t pid;
-			pid = fork();
-			if(pid == 0) {
-				execvp(cmd->args[0], cmd->args);
-				fprintf(stderr, "%s: comando non riconosciuto\n", cmd->args[0]);
-				exit(1);
-			} else if(pid > 0) {
-				int status;
-				waitpid(pid, &status, 0);					// attendo il figlio
-			} else if(pid == -1) {
-				fprintf(stderr, "operazione di fork non riuscita\n");
-				exit(-1);
-			} else {
-				fprintf(stderr, "errore nel processo padre\n");
-				exit(-2);
-			}
-		}
-	}
+	}	
 }
 
 int dupRedirect(int source, int dest) {				// duplica il fd source e chiude l'originale
@@ -106,7 +88,7 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 			}
 			// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
 			
-			if(chooseProvider(command, 1) == -1) {
+			if(chooseProvider(command) == -1) {
 				fprintf(stderr, "%s: comando non riconosciuto", command->args[0]); // se exec fallisce
 				exit(1);
 			}
@@ -216,56 +198,11 @@ int run(Node* commands) {
 					return -1;
 				}
 			}
-			
-			if(!strcmp(commands->command.args[0], "ls")) {
-			
-				int j = 0;
-
-				for(int i = 1; i < getArgCount(&commands->command); i++) {
-					if(strncmp(commands->command.args[i], "-", sizeof(char)) == NULL) {
-						/* strcpy(ls_args[j], commands->command.args[i]);
-						j++; */
-						j = i;
-					}
-				}
-				int result;
-				if(!j)
-					result = ls("");
-				else
-					result = ls(commands->command.args[j]);
-				
-				if(result == -1) {
-					dupRedirect(original_stdin, STDIN_FILENO);
-					dupRedirect(original_stdout, STDOUT_FILENO);
- 
-					return -1;
-				}
-			} else {
-				pid_t pid;
-				pid = fork();
-				if(pid == 0) {
-					execvp(commands->command.args[0], commands->command.args);
-					fprintf(stderr, "%s: comando non riconosciuto\n", commands->command.args[0]);
-					dupRedirect(original_stdin, STDIN_FILENO);
-					dupRedirect(original_stdout, STDOUT_FILENO);
- 
-					exit(1);
-				} else if(pid > 0) {
-					int status;
-					waitpid(pid, &status, 0);					// attendo il figlio
-				} else if(pid == -1) {
-					fprintf(stderr, "operazione di fork non riuscita\n");
-					exit(-1);
-				} else {
-					fprintf(stderr, "errore nel processo padre\n");
-					exit(-2);
-				}
-			}
-							//chooseProvider(&commands->command, 0); 		// figlio esegue
-			/* pid_t pid;
+ 			
+			 pid_t pid;
 			pid = fork();
 			if(pid == 0) {
-				chooseProvider(&commands->command, 0); 		// figlio esegue
+				chooseProvider(&commands->command); 		// figlio esegue
 			} else if(pid > 0) {
 				int status;
 				waitpid(pid, &status, 0);					// attendo il figlio
@@ -276,7 +213,7 @@ int run(Node* commands) {
 				fprintf(stderr, "errore nel processo padre\n");
 				exit(-2);
 			}
- */
+
 			from_pipe = 0;
 		}
 	}
