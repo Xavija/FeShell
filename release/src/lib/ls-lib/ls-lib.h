@@ -10,6 +10,12 @@
 
 #define MAX_NAME 256 	// lunghezza max dei nomi dei file
 #define ORD_SIZE 5 		// dimensione array ordini di grandezza (per ls -(l)h: fino all'ord. dei TB)
+#define LS_OPTIONS_NUM 4
+#define LS_ALL 0
+#define LS_HUMANIZE 1
+#define LS_LONG	2
+#define LS_TIME	3
+
 
 typedef struct _file_fe {
 	//char name[MAX_NAME];
@@ -34,4 +40,4 @@ int visible_file_count(char *d);
 /*Ordinamento dei file per data di modifica più recente (insertion sort).*/
 void sort_by_mtime(file_fe* files, int dim);
 /*Reimplementazione del comando `ls`*/
-int ls(char* param[]);
+int ls(char** param, int param_count);

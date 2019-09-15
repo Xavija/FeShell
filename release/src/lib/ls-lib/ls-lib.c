@@ -15,6 +15,17 @@
 #include "../structures.h"
 #include "ls-lib.h"
 
+void print_help() {
+	printf("Uso: ls [OPZIONE]\n");
+	printf("Fornisce informazioni sulle entry presenti nella directory corrente.\n");
+	printf("\n");
+	printf("Opzioni disponibili:\n");
+	printf("-a\tnon nasconde le voci che iniziano con .\n");
+	printf("-h\tstampa le dimensioni delle entry in formato human-readable (con -l)\n");
+	printf("-l\tstampa ulteriori informazioni sulle entry\n");
+	printf("-t\tstampa le entry ordinate secondo data di modifica, dalla più recente alla meno recente\n");
+}
+
 void print_mod(__mode_t mode) {
 	/*
 		Stampa in maniera leggibile i permessi di un'entry convertendone prima i valori in base 8.
@@ -240,18 +251,41 @@ int scan_dir(char* path, file_fe* files, int all) {
 	return 0;
 }
 
-int ls(char* param[]) {
+int ls(char** param, int param_count) {
 	file_fe *files;
 	int 	flag_all,
 			n,
 			i;
 
-	/* if(path == NULL || !strcmp(path, ""))					// controllo sul percorso
-		strcpy(path, ".");
-		//path = "."; */
 	char *path = ".";
+/* 	int has_path = 0;
+ */	int presence[LS_OPTIONS_NUM] = {0, 0, 0, 0};
 
-	if(strpbrk(param, "a") != NULL) {	// controllo sul flag -a
+	for(i = 1; i < param_count; i++) {
+		if(!strcmp(param[i], "--help")) {
+			print_help();
+			return 0;
+		} else if(strncmp(param[i], "-", sizeof(char)) == NULL) {
+			if(strpbrk(param[i], "a") != NULL)
+				presence[LS_ALL] = 1;
+			if(strstr(param[i], "h") != NULL)
+				presence[LS_HUMANIZE] = 1;
+			if(strstr(param[i], "l") != NULL)
+				presence[LS_LONG] = 1;
+			if(strstr(param[i], "t") != NULL)
+				presence[LS_TIME] = 1;
+		} /* else {
+			if(!has_path) {
+				path = param[i];
+				has_path = 1;
+			} else {
+				fprintf(stderr, "ls: troppi file indicati\n");
+				return -1;
+			}
+		} */
+	}
+
+	if(presence[LS_ALL]) {	// controllo sul flag -a
 		flag_all = 1;
 		n = file_count(path);			// conta tutti i file
 	} else {
@@ -263,19 +297,18 @@ int ls(char* param[]) {
 		return -1;
 	}
 
-
 	files = malloc(sizeof(file_fe)*n);	// array che conterrà nome e data ultima modifica delle entry della directory
 
 	if(scan_dir(path, files, flag_all) == -1)
 		return -1;							// errore (in scan_dir nel dettaglio)
 
-	if(strpbrk(param, "t"))
+	if(presence[LS_TIME])		// -t
 		sort_by_mtime(files, n);
 
-	if(strpbrk(param, "h"))
+	if(presence[LS_HUMANIZE])	// -h
 		humanize(files, n);
 
-	if(strpbrk(param, "l")) {
+	if(presence[LS_LONG]) { 	// -l
 		for(i = 0; i < n; i++)
 			print_long(&files[i]);
 	} else {

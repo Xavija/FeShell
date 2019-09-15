@@ -32,26 +32,13 @@ void message() {
 }
 
 int chooseProvider(_cmd* cmd) {
-	if(!strcmp(cmd->args[0], "ls")) { 									// recupero eventuali parametri per ls
-		int j = 0;
-		for(int i = 1; i < getArgCount(cmd); i++) {						// i = 1, args[0] = "ls"
-			if(strncmp(cmd->args[i], "-", sizeof(char)) == NULL) {		// se in posizione 1 c'è un "-"
-				j = i;													// allora salvo l'indice per poi passarlo come parametro a ls
-				break;
-			}
-		}
-		
-		int result;
-		if(!j)															// se j non è stato aggiornato, passo una stringa vuota come parametro
-			result = ls("");
-		else
-			result = ls(cmd->args[j]);
+	if(!strcmp(cmd->args[0], "ls")) { 									
+		int result = ls(cmd->args, cmd->arg_count);
 		exit(result);
 	} else {
-	
-			execvp(cmd->args[0], cmd->args);
-			fprintf(stderr, "%s: comando non riconosciuto\n", cmd->args[0]);
-			exit(1);
+		execvp(cmd->args[0], cmd->args);
+		fprintf(stderr, "%s: comando non riconosciuto\n", cmd->args[0]);
+		exit(1);
 	}	
 }
 
@@ -89,7 +76,7 @@ int pipeCommand(_cmd* command, int in, int from_file) {
 			// in questo modo si ha che il processo legge dal fd `in` e scrive su `fd[1]`
 			
 			if(chooseProvider(command) == -1) {
-				fprintf(stderr, "%s: comando non riconosciuto", command->args[0]); // se exec fallisce
+				fprintf(stderr, "%s: comando non riconosciuto\n", command->args[0]); // se exec fallisce
 				exit(1);
 			}
 		} else if(pid > 0) { 				// padre
@@ -134,7 +121,7 @@ int run(Node* commands) {
 		if(commands->command.redirect_mode[MODE_IN-1]) {	// redirect STDIN <
 			in = open(commands->command.file_in, O_RDONLY);
 			if(in < 0) {
-				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
+				fprintf(stderr, "%s: impossibile accedere al file\n", commands->command.file_in);
 				return -1;
 			}
 
@@ -144,7 +131,7 @@ int run(Node* commands) {
 		if(commands->command.redirect_mode[MODE_OUT-1]) {	// redirect STDOUT >
 			out = open(commands->command.file_out, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IRGRP|S_IWGRP|S_IWUSR);
 			if(out < 0) {
-				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
+				fprintf(stderr, "%s: impossibile accedere al file\n", commands->command.file_in);
 				return -1;
 			}
 			if(dup2(out, STDOUT_FILENO) == -1) {
@@ -158,7 +145,7 @@ int run(Node* commands) {
 		} else if(commands->command.redirect_mode[MODE_APPEND-1]) { // redirect STDOUT >>
 			out = open(commands->command.file_out, O_WRONLY|O_APPEND);
 			if(out < 0) {
-				fprintf(stderr, "%s: impossibile accedere al file", commands->command.file_in);
+				fprintf(stderr, "%s: impossibile accedere al file\n", commands->command.file_in);
 				return -1;
 			}
 			if(dup2(out, STDOUT_FILENO) == -1) {

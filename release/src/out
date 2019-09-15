@@ -1,7 +1,7 @@
-shell.o
-shell.c
-src
-out
-Makefile
-core
-lib
+-rw-r--r--	   1	phil    	 phil    	3296	Fri Sep 13 16:43:10 2019	shell.o
+-rw-r--r--	   1	phil    	 phil    	1304	Tue Sep 10 01:37:44 2019	shell.c
+-rw-r--r--	   1	phil    	 phil    	3296	Mon Sep  9 19:30:19 2019	src
+-rw-r-----	   1	phil    	 phil    	0	Fri Sep 13 16:45:39 2019	out
+-rw-r--r--	   1	phil    	 phil    	578	Mon Sep  9 19:30:19 2019	Makefile
+-rw-------	   1	phil    	 phil    	401408	Tue Sep 10 02:49:31 2019	core
+drwxr-xr-x	   5	phil    	 phil    	4096	Mon Sep  9 19:30:19 2019	lib

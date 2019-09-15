@@ -1,3 +1,0 @@
-/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/CMakeFiles/release.dir
-/home/phil/Unife/II-Anno-2018-19/SO/FeShell/release/cmake-build-debug/CMakeFiles/edit_cache.dir
