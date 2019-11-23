@@ -25,10 +25,22 @@ void changeWorkDirectory(char* dir) {
 
 void message() {
 	char cwd[FILENAME_MAX];
-	if(getcwd(cwd, FILENAME_MAX) != NULL) 
-		printf("\n%s $ ", cwd);
-	else
-		printf("\n>> ");
+	if(getcwd(cwd, FILENAME_MAX) != NULL) {
+		printf("\n");
+		printf(ANSI_ESCAPE_GREEN);
+		printf("%s ", cwd);
+		printf(ANSI_ESCAPE_YELLOW);
+		printf("$ ");
+		printf(ANSI_ESCAPE_WHITE);
+	}
+		// printf("\n\e[1;34m%s $ \e[0;00m", cwd);
+	else {
+		printf("\n");
+		printf(ANSI_ESCAPE_RED);
+		printf(" >> ");
+		printf(ANSI_ESCAPE_WHITE);
+	}
+		// printf("\n>> ");
 }
 
 int chooseProvider(_cmd* cmd) {

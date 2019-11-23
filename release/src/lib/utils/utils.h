@@ -1,3 +1,9 @@
+#define ANSI_ESCAPE_WHITE 	"\e[0;00m"
+#define ANSI_ESCAPE_RED 	"\e[1;31m"
+#define ANSI_ESCAPE_GREEN 	"\e[1;32m"
+#define ANSI_ESCAPE_YELLOW 	"\e[1;33m"
+#define ANSI_ESCAPE_BLUE	"\e[1;34m"
+
 /*Esegue il comando unix clear()*/
 void clear(void);
 /*Cambia directory di lavoro*/

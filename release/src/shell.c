@@ -7,7 +7,7 @@
 #include "lib/parsing-lib/parsing-lib.h"
 
 int main(int argc, char* argv[]) {
-	char* 	buffer = (char*) malloc(sizeof(char)*BUFSIZ);	// input buffer
+	char* 	buffer = malloc(sizeof(char)*BUFSIZ);	// input buffer
 	if(buffer == NULL) {
 		fprintf(stderr, "allocazione del buffer non riuscita\n");
 		exit(2);

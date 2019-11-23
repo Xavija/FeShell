@@ -316,6 +316,7 @@ int ls(char** param, int param_count) {
 			printf("%s\n", files[i].name);
 	}
 	
+	free(files);
 	return 0;
 
 }
